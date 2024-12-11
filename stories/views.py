@@ -2,12 +2,20 @@ import os
 from django.core.files.storage import FileSystemStorage
 from django.shortcuts import render, HttpResponse
 from django.http import JsonResponse
+from django.conf import settings
+
+from pathlib import Path
 from openai import OpenAI
 import requests
 from langdetect import detect
 from io import BytesIO
 import json
 import time
+import uuid 
+
+
+from dotenv import load_dotenv
+load_dotenv('config.env')
 
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 STABLE_DIFFUSION_API_KEY = os.getenv('STABLE_DIFFUSION_API_KEY')
@@ -26,7 +34,6 @@ def generate_story(request):
         characters = request.POST.getlist('characters[]')
         details = request.POST.get('details', False)
     
-        
         system_input = "You are a professional fairy tale writer. Create a creative fairy tale tailored to the child's age, gender, and preferred genre. Be sure to use vocabulary appropriate for the child's age and keep the story length suitable. Provide both a Korean and an English version of the story. ex) korean: \n ~~, english:\n"
         user_input = f"The child's age is {age}, gender is {gender}, and the desired genre is {genre}. Please create a fairy tale based on these preferences."
         
@@ -35,18 +42,17 @@ def generate_story(request):
         if details:
             user_input += f"Include detailed descriptions: {', '.join(details)}."
             
-        scenario, response = generate_scenario(system_input, user_input)
-        
+        scenario = generate_scenario(system_input, user_input)
+        print(scenario)
         # 문단 분리
         paragraphs = scenario.split("\n\n")
 
-        # 언어별로 저장할 구조
+        # 언어별로 저장
         story_json = {"Korean": [], "English": []}
-
         
         k = -1
 
-        # 언어 감지 및 분리
+        # 영어 한국어 분리
         for idx, para in enumerate(paragraphs):
             lang = detect(para)  
             if lang == "ko":
@@ -54,19 +60,35 @@ def generate_story(request):
                 k += 1
             elif lang == "en":
                 story_json["English"].append({"scene": idx - k, "content": para})
-
+                
+        ### 디버깅용 ###
+        # with open("./story.json", "r", encoding="utf-8") as file:
+        #     story_json = json.load(file)
+        # print(story_json['English'])  
+        
         output_format = "jpeg"
         aspect_ratio = "16:9"
 
         # JSON 데이터를 기반으로 이미지 생성
         generated_images = generate_images_from_json(story_json['English'], output_format, aspect_ratio)
 
-        
+
+        # 페이지 데이터를 생성
+        pages = []
+        for idx, (scene, img_data) in enumerate(zip(story_json["Korean"], generated_images)):
+            pages.append({
+                "image": img_data['file'],
+                "text": scene["content"],
+                "scene": idx + 1,
+            })
+
+        context = {
+            "pages": pages,
+        }
+        print(context)
 
                 
-
-
-        # 결과 반환
+        # html이랑 결과랑 같이 보내기
         return render(request, '2story.html', context)
 
 
@@ -88,42 +110,11 @@ def generate_scenario(system_input, user_input, model="gpt-4o-mini", temperature
         )
         
         scenario = response.choices[0].message.content
-        return scenario, response
+        return scenario
     
     except Exception as e:
         return f"Unexpected Error: {str(e)}"
 
-
-
-
-
-def generate_image(description):
-    url = "https://api.stable-diffusion.org/v1/generate"
-    headers = {"Authorization": f"Bearer {STABLE_DIFFUSION_API_KEY}"}
-    payload = {"prompt": description}
-    response = requests.post(url, headers=headers, json=payload)
-    return response.json().get('image_url')
-
-
-
-
-
-# Set up Eleven Labs API
-def generate_tts(text):
-    url = "https://api.elevenlabs.io/v1/tts"
-    headers = {
-        "Authorization": f"Bearer {ELEVEN_LABS_API_KEY}",
-        "Content-Type": "application/json"
-    }
-    payload = {"text": text, "voice": "default"}
-    response = requests.post(url, headers=headers, json=payload)
-    file_path = f"media/tts_output_{text[:10].replace(' ', '_')}.mp3"
-    with open(file_path, 'wb') as f:
-        f.write(response.content)
-    return file_path
-
-
-#@title Define functions
 
 def send_generation_request(
     host,
@@ -132,7 +123,7 @@ def send_generation_request(
 ):
     headers = {
         "Accept": "image/*",
-        "Authorization": f"Bearer {STABILITY_KEY}"
+        "Authorization": f"Bearer {STABLE_DIFFUSION_API_KEY}"
     }
 
     if files is None:
@@ -223,10 +214,9 @@ def send_async_generation_request(
 
     return response
 
-
 def generate_image_from_prompt(prompt, negative_prompt="", aspect_ratio="16:9", seed=0, output_format="jpeg"):
+    
     host = "https://api.stability.ai/v2beta/stable-image/generate/core"
-
     params = {
         "prompt": prompt,
         "negative_prompt": negative_prompt,
@@ -241,16 +231,17 @@ def generate_image_from_prompt(prompt, negative_prompt="", aspect_ratio="16:9", 
     # 응답 데이터 처리
     output_image = response.content
     finish_reason = response.headers.get("finish-reason")
-    response_seed = response.headers.get("seed")
+    response_seed = response.headers.get("seed", str(uuid.uuid4()))  # 없으면 UUID 사용
 
     # NSFW 필터링 확인
     if finish_reason == "CONTENT_FILTERED":
         raise Warning("Generation failed due to NSFW content.")
 
-    # 저장 경로 설정
+    # 저장 디렉토리 설정
     images_dir = os.path.join(settings.MEDIA_ROOT, 'images')
-    os.makedirs(images_dir, exist_ok=True)  # 디렉토리 생성 (이미 존재하면 무시)
+    os.makedirs(images_dir, exist_ok=True)  # 디렉토리 생성 (존재하면 무시)
 
+    # 파일 이름 및 경로 설정
     generated_filename = f"generated_{response_seed}.{output_format}"
     file_path = os.path.join(images_dir, generated_filename)
 
@@ -261,11 +252,8 @@ def generate_image_from_prompt(prompt, negative_prompt="", aspect_ratio="16:9", 
     print(f"Image saved as: {file_path}")
     return file_path
 
-def generate_images_from_json(json_file, output_format="jpeg", aspect_ratio="16:9"):
 
-    # JSON 파일 읽기
-    with open(json_file, "r", encoding="utf-8") as file:
-        story_scenes = json.load(file)
+def generate_images_from_json(story_scenes, output_format="jpeg", aspect_ratio="16:9"):
 
     generated_files = []
 
@@ -275,14 +263,20 @@ def generate_images_from_json(json_file, output_format="jpeg", aspect_ratio="16:
         print(f"Generating image for Scene {scene_number}...")
 
         try:
-            generated_filename = generate_image_from_prompt(
+            # 이미지 생성 및 절대 경로 반환
+            absolute_path = generate_image_from_prompt(
                 prompt=prompt,
                 negative_prompt="",
                 aspect_ratio=aspect_ratio,
                 seed=0,
                 output_format=output_format
             )
-            generated_files.append({"scene": scene_number, "file": generated_filename})
+
+            # 상대 경로로 변환 ### 유저에게 127.0.0.1/media/images/generated_1390576109.jpeg 이런식으로 보내지게~
+            relative_path = Path(absolute_path).relative_to(settings.MEDIA_ROOT)
+            web_path = f"{settings.MEDIA_URL}{relative_path}"
+
+            generated_files.append({"scene": scene_number, "file": web_path})
         except Warning as w:
             print(f"Scene {scene_number}: {w}")
         except Exception as e:
@@ -290,5 +284,3 @@ def generate_images_from_json(json_file, output_format="jpeg", aspect_ratio="16:
 
     print("All images generated.")
     return generated_files
-
-

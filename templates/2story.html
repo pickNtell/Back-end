@@ -44,7 +44,7 @@
       justify-content: center; /* 수평 중앙 정렬 */
       align-items: center; /* 수직 중앙 정렬 */
       background: #eef2ff; /* 페이지 배경 색상 */
-      width: 50%; /* 초기 너비 */
+      width: 100%; /* 초기 너비 */
     }
 
     /* 왼쪽 페이지 이미지 스타일 */
@@ -238,7 +238,7 @@
     <div class="page">
       <!-- 왼쪽 페이지: 이미지 영역 -->
       <div class="left-page">
-        <img src="test_img.jpg" alt="동화 이미지" onclick="openModal()" />
+        <img id="page-image" src="{{ pages.0.image }}" alt="동화 이미지" onclick="openModal()">
       </div>
 
       <!-- 드래그 가능한 구분선 -->
@@ -246,7 +246,7 @@
 
       <!-- 오른쪽 페이지: 텍스트 영역 -->
       <div class="right-page">
-        <p id="text-content">옛날 옛날, 한 작은 마을에 명랑한 소년 대현이 살고 있었어요...</p>
+        <p id="page-text"></p>
       </div>
     </div>
 
@@ -269,12 +269,12 @@
   <!-- 이미지 확대 모달 -->
   <div class="modal" id="modal">
     <span class="close" onclick="closeModal()">×</span>
-    <img src="test_img.jpg" alt="확대된 동화 이미지" />
-    <a href="test_img.jpg" download="test_img.jpg" class="download-button">이미지 다운로드</a>
+      <img id="modal-image" src="{{ pages.0.image }}" alt="확대된 동화 이미지">
+    <a id="download-link" href="{{ pages.0.image }}" download="{{ pages.0.image }}" class="download-button">이미지 다운로드</a>
   </div>
 
   <!-- 오디오 -->
-  <audio id="audio" src="test_audio.mp3"></audio>
+  <audio id="audio" src=""></audio>
 
   <script>
     let isResizing = false; // 구분선 드래그 상태
@@ -349,15 +349,32 @@
     });
 
 
-    // 이전 페이지 이동
-    function prevPage() {
-      alert("아직 구현 x");
+    const pages = {{ pages|safe }};
+    let currentPage = 0;
+
+    function updatePage() {
+      const pageData = pages[currentPage];
+      document.getElementById('page-image').src = pageData.image;
+      document.getElementById('page-text').textContent = pageData.text;
+      document.getElementById('prev-button').disabled = currentPage === 0;
+      document.getElementById('next-button').disabled = currentPage === pages.length - 1;
     }
 
-    // 다음 페이지 이동
-    function nextPage() {
-      alert("아직 구현 x");
+    function prevPage() {
+      if (currentPage > 0) {
+        currentPage--;
+        updatePage();
+      }
     }
+
+    function nextPage() {
+      if (currentPage < pages.length - 1) {
+        currentPage++;
+        updatePage();
+      }
+    }
+
+    updatePage();
 
     // 드래그 시작
     function startResizing(event) {

@@ -1,2 +1,7 @@
 # 민감한 파일 제외
 config.env
+
+# 사진 제외
+/media
+
+story.json

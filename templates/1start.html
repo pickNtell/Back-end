@@ -38,13 +38,17 @@
             </div>
 
             <!-- 성별 선택 -->
-            <div class="form-group">
-                <label>성별</label>
-                <div class="user-gender">
-                    <button type="button" id="mainmale" onclick="selectMainGender('mainmale')">남</button>
-                    <button type="button" id="mainfemale" onclick="selectMainGender('mainfemale')">여</button>
-                </div>
-            </div>
+<div class="form-group">
+    <label>성별</label>
+    <div class="user-gender">
+        <!-- 남자 버튼 -->
+        <button type="button" id="mainmale" onclick="selectMainGender('male')">남</button>
+        <!-- 여자 버튼 -->
+        <button type="button" id="mainfemale" onclick="selectMainGender('female')">여</button>
+    </div>
+    <!-- 선택된 성별 정보를 저장할 hidden input -->
+    <input type="hidden" id="gender" name="gender" value="">
+</div>
 
             <!-- 장르 선택 -->
             <div class="form-group">
@@ -95,18 +99,19 @@
 <!-- 스크립트: 동작 정의 -->
 <script>
     /**
-     * 성별 선택 처리 함수
-     * @param {string} gender - 선택된 성별 (mainmale 또는 mainfemale)
+     * 선택된 성별을 hidden input에 저장하고 버튼 스타일을 업데이트하는 함수
+     * @param {string} genderValue - 선택된 성별 값 ('male' 또는 'female')
      */
-    function selectMainGender(gender) {
-        // 모든 버튼에서 'active' 클래스 제거
+     function selectMainGender(genderValue) {
+        // hidden input에 값 설정
+        document.getElementById('gender').value = genderValue;
+
+        // 버튼 스타일 업데이트
         document.getElementById('mainmale').classList.remove('active');
         document.getElementById('mainfemale').classList.remove('active');
-
-        // 선택된 성별 버튼에 'active' 클래스 추가
-        if (gender === 'mainmale') {
+        if (genderValue === 'male') {
             document.getElementById('mainmale').classList.add('active');
-        } else if (gender === 'mainfemale') {
+        } else if (genderValue === 'female') {
             document.getElementById('mainfemale').classList.add('active');
         }
     }
