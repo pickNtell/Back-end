@@ -4,4 +4,5 @@ config.env
 # 사진 제외
 /media
 
+# 디버깅용 제외
 story.json
