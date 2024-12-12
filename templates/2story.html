@@ -232,130 +232,62 @@
   </style>
 </head>
 <body>
-  <!-- 책 전체 컨테이너 -->
   <div class="book">
-    <!-- 페이지 컨테이너 -->
     <div class="page">
-      <!-- 왼쪽 페이지: 이미지 영역 -->
       <div class="left-page">
+        <!-- 이미지 클릭 시 openModal() 호출 -->
         <img id="page-image" src="{{ pages.0.image }}" alt="동화 이미지" onclick="openModal()">
       </div>
-
-      <!-- 드래그 가능한 구분선 -->
       <div class="divider" onmousedown="startResizing(event)"></div>
-
-      <!-- 오른쪽 페이지: 텍스트 영역 -->
       <div class="right-page">
         <p id="page-text"></p>
       </div>
     </div>
 
-    <!-- 페이지 이동 버튼 -->
     <div class="page-buttons">
-      <button onclick="prevPage()">◀ 이전 페이지</button>
-      <button onclick="nextPage()">다음 페이지 ▶</button>
+      <button id="prev-button" onclick="prevPage()">◀ 이전 페이지</button>
+      <button id="next-button" onclick="nextPage()">다음 페이지 ▶</button>
     </div>
 
-    <!-- 오디오 버튼 -->
     <button class="audio-button" id="audioButton" onclick="toggleAudio()">🕪</button>
 
-    <!-- 재생 제어 버튼 -->
     <div class="control-buttons" id="controlButtons">
-        <button onclick="resumeAudio()">⏯︎</button> <!-- 이어 재생 아이콘 -->
-        <button onclick="restartAudio()">🗘</button> <!-- 처음부터 재생 아이콘 -->
-      </div>
+      <button onclick="resumeAudio()">⏯︎</button>
+      <button onclick="restartAudio()">🗘</button>
+    </div>
   </div>
 
-  <!-- 이미지 확대 모달 -->
+  <!-- 모달 이미지의 id를 modal-image로 변경 -->
   <div class="modal" id="modal">
     <span class="close" onclick="closeModal()">×</span>
-      <img id="modal-image" src="{{ pages.0.image }}" alt="확대된 동화 이미지">
+    <!-- 모달용 이미지 -->
+    <img id="modal-image" src="{{ pages.0.image }}" alt="확대된 동화 이미지">
     <a id="download-link" href="{{ pages.0.image }}" download="{{ pages.0.image }}" class="download-button">이미지 다운로드</a>
   </div>
 
-  <!-- 오디오 -->
-  <audio id="audio" src=""></audio>
+  <audio id="page-audio" src="{{ pages.0.audio }}"></audio>
 
   <script>
-    let isResizing = false; // 구분선 드래그 상태
-    const minWidth = 100; // 최소 너비
-    const dividerWidth = 5; // 구분선 너비
-    const minFontSize = 1; // 텍스트 최소 크기 (vw 단위)
-    const maxFontSize = 3; // 텍스트 최대 크기 (vw 단위)
+    let isResizing = false;
+    const minWidth = 100; 
+    const dividerWidth = 5; 
+    const minFontSize = 1; 
+    const maxFontSize = 3; 
 
-    // 모달 열기 함수
-    function openModal() {
-      const modal = document.getElementById('modal');
-      modal.style.display = 'flex';
-    }
-
-    // 모달 닫기 함수
-    function closeModal() {
-      const modal = document.getElementById('modal');
-      modal.style.display = 'none';
-    }
-
-    const audio = document.getElementById("audio");
+    const audio = document.getElementById("page-audio");
     const audioButton = document.getElementById("audioButton");
     const controlButtons = document.getElementById("controlButtons");
-
-    let isPlaying = false; // 오디오 재생 상태 저장
-
-    // 오디오 버튼 클릭 시 실행
-    function toggleAudio() {
-    if (isPlaying) {
-        // 재생 중일 때 멈춤 처리
-        audio.pause();
-        isPlaying = false;
-        audioButton.innerHTML = "🕪"; // 아이콘 변경
-        audioButton.classList.remove("audio-playing"); // 애니메이션 제거
-        audioButton.style.display = "none";
-        controlButtons.style.display = "flex";
-    } else {
-        // 멈춰 있을 때 재생 시작
-        audio.play();
-        isPlaying = true;
-        audioButton.innerHTML = "⏯︎"; // 아이콘 변경
-        audioButton.classList.add("audio-playing"); // 애니메이션 추가
-    }
-    }
-
-    // 이어 재생 버튼 클릭
-    function resumeAudio() {
-    audio.play();
-    isPlaying = true;
-    controlButtons.style.display = "none";
-    audioButton.style.display = "block";
-    audioButton.innerHTML = "⏯︎"; // 아이콘 변경
-    audioButton.classList.add("audio-playing"); // 애니메이션 추가
-    }
-
-    // 처음부터 재생 버튼 클릭
-    function restartAudio() {
-    audio.currentTime = 0; // 처음부터 재생
-    audio.play();
-    isPlaying = true;
-    controlButtons.style.display = "none";
-    audioButton.style.display = "block";
-    audioButton.innerHTML = "⏯︎"; // 아이콘 변경
-    audioButton.classList.add("audio-playing"); // 애니메이션 추가
-    }
-
-    // 오디오가 종료되었을 때 상태 초기화
-    audio.addEventListener("ended", () => {
-    isPlaying = false;
-    audioButton.innerHTML = "🕪"; // 아이콘 변경
-    audioButton.classList.remove("audio-playing"); // 애니메이션 제거
-    });
-
+    let isPlaying = false; 
 
     const pages = {{ pages|safe }};
     let currentPage = 0;
 
     function updatePage() {
       const pageData = pages[currentPage];
-      document.getElementById('page-image').src = pageData.image;
       document.getElementById('page-text').textContent = pageData.text;
+      document.getElementById('page-image').src = pageData.image;
+      document.getElementById('page-audio').src = pageData.audio;
+
       document.getElementById('prev-button').disabled = currentPage === 0;
       document.getElementById('next-button').disabled = currentPage === pages.length - 1;
     }
@@ -376,34 +308,91 @@
 
     updatePage();
 
-    // 드래그 시작
+    // 모달 열 때 현재 페이지 이미지로 모달 업데이트
+    function openModal() {
+      const modal = document.getElementById('modal');
+      const modalImage = document.getElementById('modal-image');
+      const downloadLink = document.getElementById('download-link');
+
+      // 현재 페이지 이미지 정보를 가져와 설정
+      const currentImage = pages[currentPage].image;
+      modalImage.src = currentImage;
+      downloadLink.href = currentImage;
+      downloadLink.download = currentImage.substring(currentImage.lastIndexOf('/')+1); 
+      // 위에서 download 속성은 이미지 파일명만 추출 (URL에서 마지막 / 이후 부분)
+
+      modal.style.display = 'flex';
+    }
+
+    function closeModal() {
+      const modal = document.getElementById('modal');
+      modal.style.display = 'none';
+    }
+
+    function toggleAudio() {
+      if (isPlaying) {
+        audio.pause();
+        isPlaying = false;
+        audioButton.innerHTML = "🕪";
+        audioButton.classList.remove("audio-playing");
+        audioButton.style.display = "none";
+        controlButtons.style.display = "flex";
+      } else {
+        audio.play();
+        isPlaying = true;
+        audioButton.innerHTML = "⏯︎";
+        audioButton.classList.add("audio-playing");
+      }
+    }
+
+    function resumeAudio() {
+      audio.play();
+      isPlaying = true;
+      controlButtons.style.display = "none";
+      audioButton.style.display = "block";
+      audioButton.innerHTML = "⏯︎";
+      audioButton.classList.add("audio-playing");
+    }
+
+    function restartAudio() {
+      audio.currentTime = 0;
+      audio.play();
+      isPlaying = true;
+      controlButtons.style.display = "none";
+      audioButton.style.display = "block";
+      audioButton.innerHTML = "⏯︎";
+      audioButton.classList.add("audio-playing");
+    }
+
+    audio.addEventListener("ended", () => {
+      isPlaying = false;
+      audioButton.innerHTML = "🕪"; 
+      audioButton.classList.remove("audio-playing");
+    });
+
     function startResizing(event) {
       isResizing = true;
       document.addEventListener("mousemove", resize);
       document.addEventListener("mouseup", stopResizing);
-      event.preventDefault(); // 기본 동작 차단
+      event.preventDefault();
     }
 
-    // 드래그 중 크기 조정
     function resize(event) {
       if (!isResizing) return;
 
       const book = document.querySelector(".book");
       const leftPage = document.querySelector(".left-page");
       const rightPage = document.querySelector(".right-page");
-      const textContent = document.getElementById("text-content");
+      const textContent = document.getElementById("page-text");
 
       const bookRect = book.getBoundingClientRect();
-      const offsetX = event.clientX - bookRect.left; // 마우스 위치 계산
+      const offsetX = event.clientX - bookRect.left; 
 
-      // 왼쪽 페이지 너비 조정
       const leftWidth = Math.max(minWidth, Math.min(offsetX, bookRect.width - minWidth - dividerWidth));
       leftPage.style.width = `${leftWidth}px`;
 
-      // 오른쪽 페이지 너비 조정
       rightPage.style.width = `${bookRect.width - leftWidth - dividerWidth}px`;
 
-      // 텍스트 크기 조정
       const fontSize = Math.max(
         minFontSize,
         Math.min(maxFontSize, (rightPage.offsetWidth / bookRect.width) * maxFontSize)
@@ -411,7 +400,6 @@
       textContent.style.fontSize = `${fontSize}vw`;
     }
 
-    // 드래그 종료
     function stopResizing() {
       isResizing = false;
       document.removeEventListener("mousemove", resize);

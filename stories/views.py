@@ -9,6 +9,12 @@ from openai import OpenAI
 import requests
 from langdetect import detect
 from io import BytesIO
+
+from elevenlabs import play
+from elevenlabs.client import ElevenLabs
+from elevenlabs import save
+import base64
+
 import json
 import time
 import uuid 
@@ -21,11 +27,11 @@ OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 STABLE_DIFFUSION_API_KEY = os.getenv('STABLE_DIFFUSION_API_KEY')
 ELEVEN_LABS_API_KEY = os.getenv('ELEVEN_LABS_API_KEY')
 
-# main page
+# Main page path (Typeing informations about fairy tale user want)
 def home(request):
     return render(request, '1start.html')
 
-# second page
+# Second page path (Generate and Show the fairy tale)
 def generate_story(request):
     if request.method == 'POST':
         age = request.POST.get('age')
@@ -33,26 +39,29 @@ def generate_story(request):
         genre = request.POST.get('genre')
         characters = request.POST.getlist('characters[]')
         details = request.POST.get('details', False)
-    
-        system_input = "You are a professional fairy tale writer. Create a creative fairy tale tailored to the child's age, gender, and preferred genre. Be sure to use vocabulary appropriate for the child's age and keep the story length suitable. Provide both a Korean and an English version of the story. ex) korean: \n ~~, english:\n"
+        print(age, gender, genre, characters, details)
+    ### 1. Setting prompt ###
+        system_input = "You are a professional fairy tale writer. Create a creative fairy tale tailored to  the child's age, gender, and preferred genre. Be sure to use vocabulary appropriate for the child's age and keep the story length suitable. Provide both a Korean and an English version of the story. ex) korean:\n ~~ \n english:\n ~~"
         user_input = f"The child's age is {age}, gender is {gender}, and the desired genre is {genre}. Please create a fairy tale based on these preferences."
-        
-        if characters:
+        if characters is not None:
             user_input += f"The story must include characters: {', '.join(characters)}. "
         if details:
             user_input += f"Include detailed descriptions: {', '.join(details)}."
-            
-        scenario = generate_scenario(system_input, user_input)
-        print(scenario)
-        # 문단 분리
-        paragraphs = scenario.split("\n\n")
-
-        # 언어별로 저장
-        story_json = {"Korean": [], "English": []}
+    ##########################
         
+        
+    ### 2. Generate a scenario ###
+        scenario = generate_scenario(system_input, user_input)
+        # print(scenario)
+    ##############################
+        
+        
+    ### 3. Post-processing the scenario ###
+        # Separate paragraphs
+        paragraphs = scenario.split("\n\n")
+        # Separate the json file by languages
+        story_json = {"Korean": [], "English": []}
         k = -1
-
-        # 영어 한국어 분리
         for idx, para in enumerate(paragraphs):
             lang = detect(para)  
             if lang == "ko":
@@ -60,38 +69,56 @@ def generate_story(request):
                 k += 1
             elif lang == "en":
                 story_json["English"].append({"scene": idx - k, "content": para})
-                
-        ### 디버깅용 ###
+        
+        ### For debugging ###
         # with open("./story.json", "r", encoding="utf-8") as file:
         #     story_json = json.load(file)
-        # print(story_json['English'])  
-        
+        #####################
+    ########################################
+    
+    
+    ### 4. Generate images using the scenario above ###
         output_format = "jpeg"
         aspect_ratio = "16:9"
-
-        # JSON 데이터를 기반으로 이미지 생성
         generated_images = generate_images_from_json(story_json['English'], output_format, aspect_ratio)
+        print(generated_images)
+        
+        ### For debugging ###
+        # with open("./image.json", "r", encoding="utf-8") as file:
+        #     generated_images = json.load(file)
+        #####################
+    ###################################################
 
 
-        # 페이지 데이터를 생성
+    ### 5. Generate TTS using the scenario above ###
+        generated_TTS = generate_audio_save(story_json['Korean'])
+        ### For debugging ###
+        # with open("./audio.json", "r", encoding="utf-8") as file:
+        #     generated_TTS = json.load(file)
+        #####################
+    ###################################################
+
+
+    ### Create a context that combines Scenario, Images, Audios ###
         pages = []
-        for idx, (scene, img_data) in enumerate(zip(story_json["Korean"], generated_images)):
+        for idx, (scene, img, tts) in enumerate(zip(story_json["Korean"], generated_images, generated_TTS)):
             pages.append({
-                "image": img_data['file'],
-                "text": scene["content"],
+                "text": scene['content'],
+                "image": img['file'],
+                "audio": tts['file'],
                 "scene": idx + 1,
             })
-
         context = {
             "pages": pages,
         }
-        print(context)
-
+    ################################################################
                 
-        # html이랑 결과랑 같이 보내기
+                
+                
+        # Send both a html and context(scenario+images+TTS)
         return render(request, '2story.html', context)
 
-
+    # If the function recieves nothing, throw the 400 error
     return JsonResponse({'error': 'Invalid request method'}, status=400)
 
 
@@ -159,7 +186,7 @@ def send_async_generation_request(
 ):
     headers = {
         "Accept": "application/json",
-        "Authorization": f"Bearer {STABILITY_KEY}"
+        "Authorization": f"Bearer {STABLE_DIFFUSSION_API_KEY}"
     }
 
     if files is None:
@@ -284,3 +311,59 @@ def generate_images_from_json(story_scenes, output_format="jpeg", aspect_ratio="
 
     print("All images generated.")
     return generated_files
+
+def generate_TTS(scene_number, story):
+    client = ElevenLabs(
+        api_key = ELEVEN_LABS_API_KEY
+    )
+            # 텍스트로 음성 생성
+    audio = client.generate(
+            text=story,
+            voice="Jessica",
+            model="eleven_multilingual_v2"
+    )
+
+    # 저장 디렉토리 설정
+    audio_dir = os.path.join(settings.MEDIA_ROOT, 'audios')
+    os.makedirs(audio_dir, exist_ok=True)  # 디렉토리 생성 (존재하면 무시)
+
+    # 파일 이름 및 경로 설정
+    random_uuid = uuid.uuid4()
+    generated_filename = f"generated_{scene_number}_{random_uuid}.mp3"
+    file_path = os.path.join(audio_dir, generated_filename)
+
+    save(audio, file_path)
+
+    
+    print(f"Audio content written to file: {file_path}")
+
+    return file_path
+
+
+def generate_audio_save(story_scenes):
+    
+    generated_files = []
+
+    for scene in story_scenes:
+        scene_number = scene["scene"]
+        prompt = scene["content"]
+        print(f"Generating TTS for Scene {scene_number}...")
+        try:
+            # 이미지 생성 및 절대 경로 반환
+            absolute_path = generate_TTS(scene_number, prompt)
+
+            # 상대 경로로 변환 ### 유저에게 127.0.0.1/media/audios/generated_1390576109.mp3 이런식으로 보내지게~
+            relative_path = Path(absolute_path).relative_to(settings.MEDIA_ROOT)
+            web_path = f"{settings.MEDIA_URL}{relative_path}"
+
+            generated_files.append({"scene": scene_number, "file": web_path})
+        except Warning as w:
+            print(f"Scene {scene_number}: {w}")
+        except Exception as e:
+            print(f"Scene {scene_number}: {e}")
+
+    print("All TTS generated.")
+    return generated_files
+
+
+
