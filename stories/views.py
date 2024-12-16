@@ -7,12 +7,13 @@ from django.conf import settings
 from pathlib import Path
 from openai import OpenAI
 import requests
-from langdetect import detect
+from langdetect import detect, LangDetectException
 from io import BytesIO
 
 from elevenlabs import play
 from elevenlabs.client import ElevenLabs
 from elevenlabs import save
+
 import base64
 
 import json
@@ -63,12 +64,18 @@ def generate_story(request):
         story_json = {"Korean": [], "English": []}
         k = -1
         for idx, para in enumerate(paragraphs):
-            lang = detect(para)  
-            if lang == "ko":
-                story_json["Korean"].append({"scene": idx + 1, "content": para})
-                k += 1
-            elif lang == "en":
-                story_json["English"].append({"scene": idx - k, "content": para})
+            if not para.strip():  # 빈 문자열 또는 공백 문자열 확인
+                print(f"Empty paragraph detected at index {idx}. Skipping.")
+                continue
+            try:
+                lang = detect(para)
+                if lang == "ko":
+                    story_json["Korean"].append({"scene": idx + 1, "content": para})
+                    k += 1
+                elif lang == "en":
+                    story_json["English"].append({"scene": idx - k, "content": para})
+            except LangDetectException as e:
+                print(f"LangDetectException for paragraph {idx}: {e}")
         
         ### For debugging ###
         # with open("./story.json", "r", encoding="utf-8") as file:
